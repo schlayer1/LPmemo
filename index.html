@@ -16,6 +16,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <style>
         body { overscroll-behavior-y: contain; }
         html, body { height: 100%; margin: 0; }
@@ -27,10 +28,10 @@
         .dark ::-webkit-scrollbar-thumb { background: #475569; border: 2px solid transparent; background-clip: padding-box; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; border: 2px solid transparent; background-clip: padding-box; }
         
-        .fade-in { animation: fadeIn 0.25s ease-out; }
+        .fade-in { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* KUGELSICHERES DRUCK-LAYOUT */
+        /* KUGELSICHERES DRUCK-LAYOUT (Entfernt URLs und Datum!) */
         @media screen {
             .print-only { display: none !important; }
         }
@@ -44,20 +45,20 @@
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
+            @page {
+                margin: 0 !important; /* Zwingt iPad/Browser, Datum und URL wegzulassen! */
+                size: A4 portrait;
+            }
             .print-only {
                 display: block !important;
                 background-color: white !important;
                 color: black !important;
-                padding: 2.5cm !important; /* Echter Seitenrand für den Text */
+                padding: 2.5cm 2.5cm 2.5cm 2.5cm !important; /* Echter Seitenrand für den Text auf dem Papier */
                 width: 100% !important;
-                box-sizing: border-box;
-                white-space: pre-wrap;
-                text-align: justify;
-                line-height: 1.5;
-            }
-            @page {
-                margin: 0 !important; /* Dieser Befehl zwingt den Browser, Datum und URL wegzulassen! */
-                size: A4 portrait;
+                box-sizing: border-box !important;
+                white-space: pre-wrap !important;
+                text-align: justify !important;
+                line-height: 1.5 !important;
             }
         }
     </style>
@@ -208,7 +209,7 @@
 
         const loadSavedState = () => {
             try {
-                const saved = localStorage.getItem('gutachten_state_final_v8');
+                const saved = localStorage.getItem('gutachten_state_final_v13');
                 if (saved) {
                     const parsed = JSON.parse(saved);
                     if (parsed && Array.isArray(parsed.protocolEntries)) {
@@ -238,8 +239,8 @@
                     return (
                         <div className="p-8 bg-slate-50 text-slate-900 h-screen flex flex-col items-center justify-center text-center">
                             <IconAlertTriangle className="w-16 h-16 text-red-500 mb-4" />
-                            <h1 className="text-2xl font-bold mb-4">Ein Ladefehler ist aufgetreten.</h1>
-                            <p className="mb-6 text-sm text-slate-600 max-w-md">Ihr Browser hat versucht, einen alten, inkompatiblen Speicherstand zu laden. Bitte setzen Sie die App zurück.</p>
+                            <h1 className="text-2xl font-bold mb-4">Ein technischer Fehler ist aufgetreten.</h1>
+                            <p className="mb-6 text-sm text-slate-600 max-w-md">Die App hat sich aufgrund veralteter Speicherdaten oder einer blockierten Funktion verschluckt.</p>
                             <button 
                                 onClick={() => { localStorage.clear(); window.location.reload(); }}
                                 className="bg-red-600 text-white px-6 py-3 rounded-lg font-bold shadow-lg hover:bg-red-700 active:scale-95 transition-all"
@@ -276,7 +277,7 @@
           const [lastAutoText, setLastAutoText] = useState(savedState?.lastAutoText || "");
           const [backupText, setBackupText] = useState("");
           
-          const [editorFont, setEditorFont] = useState(savedState?.editorFont || 'Arial, sans-serif');
+          const [editorFont, setEditorFont] = useState(savedState?.editorFont || 'Arial');
           const [editorSize, setEditorSize] = useState(savedState?.editorSize || '11pt');
 
           const [openCategories, setOpenCategories] = useState(() => {
@@ -326,7 +327,7 @@
                   editableText, lastAutoText, isDarkMode, editorFont, editorSize,
                   timerSeconds, timerIsRunning, protocolEntries 
               };
-              localStorage.setItem('gutachten_state_final_v8', JSON.stringify(stateToSave));
+              localStorage.setItem('gutachten_state_final_v13', JSON.stringify(stateToSave));
           }, [activeExam, selections, gender, examineeType, examineeName, editableText, lastAutoText, isDarkMode, editorFont, editorSize, timerSeconds, timerIsRunning, protocolEntries]);
 
           const getExamineeTerm = () => {
@@ -469,28 +470,38 @@
               window.print();
           };
 
-          // 💎 EXTREM ROBUSTER WORD EXPORT
+          // 💎 KUGELSICHERER MS WORD EXPORT (RTF Format) - Ganz simpel, bricht garantiert nicht ab
           const exportToWord = () => {
-              const formattedText = (editableText || "").replace(/\n/g, '<br>');
-              // Ohne @page oder komplexe Styles, da moderne Word Versionen extrem sensibel bei generiertem HTML sind.
-              // Seitenränder werden nativ von Word aus der default template Datei übernommen.
-              const htmlContent = `
-                <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-                <head>
-                    <meta charset="utf-8">
-                    <title>Niederschrift</title>
-                </head>
-                <body style="font-family: ${editorFont.replace(/"/g, "'")}; font-size: ${editorSize}; text-align: justify; line-height: 1.5;">
-                    ${formattedText}
-                </body>
-                </html>
-              `;
+              let safeFont = "\\f0";
+              if (editorFont.includes("Times")) safeFont = "\\f1";
+              if (editorFont.includes("Calibri")) safeFont = "\\f2";
               
-              const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+              let fSize = 22; 
+              if (editorSize === "10pt") fSize = 20;
+              if (editorSize === "11pt") fSize = 22;
+              if (editorSize === "12pt") fSize = 24;
+              if (editorSize === "14pt") fSize = 28;
+
+              const escapeRTF = (str) => {
+                  return str.replace(/[\\{}]/g, "\\$&")
+                            .replace(/\n/g, "\\par\n")
+                            .replace(/[^\x00-\x7F]/g, c => "\\u" + c.charCodeAt(0) + "?");
+              };
+
+              // Reine Text-Zusammensetzung (kein Template String) um React-Babel Crashes zu verhindern
+              const rtf1 = "{\\rtf1\\ansi\\ansicpg1252\\deff0\\nouicompat\n";
+              const rtf2 = "{\\fonttbl{\\f0\\fnil\\fcharset0 Arial;}{\\f1\\fnil\\fcharset0 Times New Roman;}{\\f2\\fnil\\fcharset0 Calibri;}}\n";
+              const rtf3 = "\\viewkind4\\uc1 \n";
+              const rtf4 = "\\pard\\sa200\\sl360\\slmult1\\qj" + safeFont + "\\fs" + fSize + "\\lang7 " + escapeRTF(editableText || "Kein Text generiert.") + "\\par\n";
+              const rtf5 = "}";
+              
+              const rtfContent = rtf1 + rtf2 + rtf3 + rtf4 + rtf5;
+
+              const blob = new Blob([rtfContent], { type: 'application/rtf' });
               const url = URL.createObjectURL(blob);
               const link = document.createElement('a');
               link.href = url;
-              link.download = `Niederschrift_${examineeName !== 'Name des Prüflings' ? examineeName.replace(/\s+/g, '_') : 'Pruefling'}.doc`;
+              link.download = "Niederschrift_" + (examineeName !== 'Name des Prüflings' ? examineeName.replace(/\s+/g, '_') : 'Pruefling') + ".rtf";
               document.body.appendChild(link);
               link.click();
               document.body.removeChild(link);
@@ -520,7 +531,7 @@
 
           return (
             <React.Fragment>
-            {/* Screen UI - Versteckt beim Drucken via .screen-only */}
+            {/* Screen UI */}
             <div className="h-full flex flex-col relative screen-only">
               
               {confirmDialog && (
@@ -577,6 +588,7 @@
                 </div>
               </header>
 
+              {/* SAUBERE TAB-NAVIGATION per echtem React Conditional Rendering */}
               <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-2 sm:px-4 flex justify-center sm:justify-start shadow-sm z-10 shrink-0">
                   <div className="flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-lg w-full sm:w-auto overflow-x-auto hide-scrollbar gap-1 relative z-10">
                       <button onClick={() => setActiveTab('protokoll')} className={`flex-1 sm:flex-none min-w-[110px] px-3 sm:px-5 py-2 text-xs sm:text-sm font-bold rounded-md transition-colors flex items-center justify-center whitespace-nowrap active:scale-95 ${activeTab === 'protokoll' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}>
@@ -591,6 +603,7 @@
                   </div>
               </div>
 
+              {/* MAIN CONTENT AREA */}
               <main className="flex-1 overflow-hidden flex flex-col md:flex-row relative bg-slate-200 dark:bg-slate-900">
                 
                 {/* === LEFT PANE === */}
@@ -697,7 +710,7 @@
 
                   {/* --- VIEW: RASTER --- */}
                   {activeTab === 'raster' && (
-                  <div className="fade-in max-w-2xl mx-auto">
+                  <div className="fade-in max-w-2xl mx-auto pb-12">
                           
                           <div className="flex flex-wrap justify-between items-end mb-4 gap-2">
                             <div>
@@ -737,7 +750,7 @@
                             </div>
                           </div>
 
-                          <div className="space-y-4 md:space-y-5 pb-12">
+                          <div className="space-y-4 md:space-y-5">
                             {currentCategories.map((category) => {
                               const visibleIndicators = focusMode ? category.indicators.filter(ind => selections[ind.id] === undefined) : category.indicators;
                               
@@ -747,7 +760,7 @@
                                           <IconCheckCircle className="w-5 h-5 mr-2" />
                                           <span className="font-semibold text-sm">{category.title}: Alles bewertet!</span>
                                       </div>
-                                  )
+                                  );
                               }
 
                               const catAvg = calculateCategoryAverage(category);
@@ -901,7 +914,7 @@
                             <IconType className="w-4 h-4 mr-1.5 opacity-70" /> Dokument
                         </h2>
                         <div className="flex gap-2">
-                            <button onClick={() => handleExportAction(exportToWord)} className="flex justify-center items-center px-3 py-1.5 bg-blue-600 text-white hover:bg-blue-700 rounded-md font-medium text-xs transition-colors shadow-sm active:scale-95" title="Als Word-Datei">
+                            <button onClick={() => handleExportAction(exportToWord)} className="flex justify-center items-center px-3 py-1.5 bg-blue-600 text-white hover:bg-blue-700 rounded-md font-medium text-xs transition-colors shadow-sm active:scale-95" title="Als MS Word Datei laden">
                                 <IconFileWord className="w-3.5 h-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">Word</span>
                             </button>
                             <button onClick={() => handleExportAction(triggerPrint)} className="flex justify-center items-center px-3 py-1.5 bg-slate-700 dark:bg-slate-600 text-white hover:bg-slate-800 dark:hover:bg-slate-500 rounded-md font-medium text-xs transition-colors shadow-sm active:scale-95" title="Drucken / PDF">
@@ -915,9 +928,9 @@
                     
                     <div className="flex gap-2">
                         <select value={editorFont} onChange={(e) => setEditorFont(e.target.value)} className="text-xs px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none hover:border-slate-400">
-                            <option value="Arial, sans-serif">Arial</option>
-                            <option value="'Times New Roman', serif">Times New Roman</option>
-                            <option value="Calibri, sans-serif">Calibri</option>
+                            <option value="Arial">Arial</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Calibri">Calibri</option>
                         </select>
                         <select value={editorSize} onChange={(e) => setEditorSize(e.target.value)} className="text-xs px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none hover:border-slate-400">
                             <option value="10pt">10 pt</option><option value="11pt">11 pt</option><option value="12pt">12 pt</option><option value="14pt">14 pt</option>
