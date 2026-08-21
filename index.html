@@ -31,29 +31,42 @@
         .fade-in { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* KUGELSICHERES DRUCK-LAYOUT (Entfernt URLs und Datum!) */
+        /* KUGELSICHERES DRUCK-LAYOUT (Entfernt Schatten, Reste und Scrolling-Bugs) */
         @media screen {
             .print-only { display: none !important; }
         }
         @media print {
             .screen-only { display: none !important; }
-            body, html { 
+            
+            /* Zwingt den Browser, das endlose Blatt zu akzeptieren und Schatten zu löschen */
+            html, body, #root { 
+                height: auto !important; 
+                min-height: 100% !important;
+                display: block !important;
                 background-color: white !important; 
                 background: white !important; 
                 margin: 0 !important; 
                 padding: 0 !important; 
+                overflow: visible !important;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
+            
+            * {
+                box-shadow: none !important;
+                background-color: transparent !important;
+            }
+
             @page {
-                margin: 0 !important; /* Zwingt iPad/Browser, Datum und URL wegzulassen! */
+                margin: 0 !important; /* Unterdrückt URL und Datum vom Tablet-Browser */
                 size: A4 portrait;
             }
+            
             .print-only {
                 display: block !important;
                 background-color: white !important;
                 color: black !important;
-                padding: 2.5cm 2.5cm 2.5cm 2.5cm !important; /* Echter Seitenrand für den Text auf dem Papier */
+                padding: 2.5cm 2.5cm 2.5cm 2.5cm !important; /* Physischer Rand für den Text */
                 width: 100% !important;
                 box-sizing: border-box !important;
                 white-space: pre-wrap !important;
@@ -209,7 +222,7 @@
 
         const loadSavedState = () => {
             try {
-                const saved = localStorage.getItem('gutachten_state_final_v13');
+                const saved = localStorage.getItem('gutachten_state_final_v14');
                 if (saved) {
                     const parsed = JSON.parse(saved);
                     if (parsed && Array.isArray(parsed.protocolEntries)) {
@@ -239,8 +252,8 @@
                     return (
                         <div className="p-8 bg-slate-50 text-slate-900 h-screen flex flex-col items-center justify-center text-center">
                             <IconAlertTriangle className="w-16 h-16 text-red-500 mb-4" />
-                            <h1 className="text-2xl font-bold mb-4">Ein technischer Fehler ist aufgetreten.</h1>
-                            <p className="mb-6 text-sm text-slate-600 max-w-md">Die App hat sich aufgrund veralteter Speicherdaten oder einer blockierten Funktion verschluckt.</p>
+                            <h1 className="text-2xl font-bold mb-4">Ein Ladefehler ist aufgetreten.</h1>
+                            <p className="mb-6 text-sm text-slate-600 max-w-md">Ihr Browser hat versucht, einen alten, inkompatiblen Speicherstand zu laden. Bitte setzen Sie die App zurück.</p>
                             <button 
                                 onClick={() => { localStorage.clear(); window.location.reload(); }}
                                 className="bg-red-600 text-white px-6 py-3 rounded-lg font-bold shadow-lg hover:bg-red-700 active:scale-95 transition-all"
@@ -327,7 +340,7 @@
                   editableText, lastAutoText, isDarkMode, editorFont, editorSize,
                   timerSeconds, timerIsRunning, protocolEntries 
               };
-              localStorage.setItem('gutachten_state_final_v13', JSON.stringify(stateToSave));
+              localStorage.setItem('gutachten_state_final_v14', JSON.stringify(stateToSave));
           }, [activeExam, selections, gender, examineeType, examineeName, editableText, lastAutoText, isDarkMode, editorFont, editorSize, timerSeconds, timerIsRunning, protocolEntries]);
 
           const getExamineeTerm = () => {
@@ -470,7 +483,6 @@
               window.print();
           };
 
-          // 💎 KUGELSICHERER MS WORD EXPORT (RTF Format) - Ganz simpel, bricht garantiert nicht ab
           const exportToWord = () => {
               let safeFont = "\\f0";
               if (editorFont.includes("Times")) safeFont = "\\f1";
@@ -488,7 +500,6 @@
                             .replace(/[^\x00-\x7F]/g, c => "\\u" + c.charCodeAt(0) + "?");
               };
 
-              // Reine Text-Zusammensetzung (kein Template String) um React-Babel Crashes zu verhindern
               const rtf1 = "{\\rtf1\\ansi\\ansicpg1252\\deff0\\nouicompat\n";
               const rtf2 = "{\\fonttbl{\\f0\\fnil\\fcharset0 Arial;}{\\f1\\fnil\\fcharset0 Times New Roman;}{\\f2\\fnil\\fcharset0 Calibri;}}\n";
               const rtf3 = "\\viewkind4\\uc1 \n";
@@ -525,6 +536,7 @@
               });
             });
             if (count === 0) return null;
+            // Rückkehr des gewohnten 1-Dezimalstellen-Formats (z.B. 12.4)
             return (sum / count).toFixed(1);
           };
           const totalAvg = calculateTotalAverage();
@@ -575,6 +587,15 @@
                     {isDarkMode ? <IconSun className="w-4 h-4" /> : <IconMoon className="w-4 h-4" />}
                   </button>
 
+                  {/* 💎 NEU: Der gewünschte Gesamtdurchschnitt */}
+                  <div className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center shadow-inner shrink-0">
+                    <IconCalculator className="w-4 h-4 text-blue-400 mr-1.5" />
+                    <span className="text-xs text-slate-300 mr-1.5">Gesamt-Ø:</span>
+                    <span className={`text-sm font-bold ${totalAvg !== null ? 'text-blue-400' : 'text-slate-500'}`}>
+                      {totalAvg !== null ? `${totalAvg}` : '–'}
+                    </span>
+                  </div>
+
                   <div className="flex bg-slate-800 rounded-lg p-1 flex-1 sm:flex-none shadow-inner relative z-10">
                     <button onClick={() => { if(activeExam !== 'muendlich') requestConfirm("Prüfungstyp wechseln?", "Protokoll, Noten und Editor-Texte werden komplett geleert.", () => { setActiveExam('muendlich'); executeResetAll(); }) }}
                       className={`flex-1 sm:flex-none flex justify-center items-center px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-md transition-all active:scale-95 ${activeExam === 'muendlich' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-700'}`}>
@@ -588,7 +609,7 @@
                 </div>
               </header>
 
-              {/* SAUBERE TAB-NAVIGATION per echtem React Conditional Rendering */}
+              {/* SAUBERE TAB-NAVIGATION */}
               <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-2 sm:px-4 flex justify-center sm:justify-start shadow-sm z-10 shrink-0">
                   <div className="flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-lg w-full sm:w-auto overflow-x-auto hide-scrollbar gap-1 relative z-10">
                       <button onClick={() => setActiveTab('protokoll')} className={`flex-1 sm:flex-none min-w-[110px] px-3 sm:px-5 py-2 text-xs sm:text-sm font-bold rounded-md transition-colors flex items-center justify-center whitespace-nowrap active:scale-95 ${activeTab === 'protokoll' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}>
@@ -750,7 +771,7 @@
                             </div>
                           </div>
 
-                          <div className="space-y-4 md:space-y-5">
+                          <div className="space-y-4 md:space-y-5 pb-12">
                             {currentCategories.map((category) => {
                               const visibleIndicators = focusMode ? category.indicators.filter(ind => selections[ind.id] === undefined) : category.indicators;
                               
